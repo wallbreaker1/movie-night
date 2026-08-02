@@ -276,7 +276,6 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function Vid
         poster={poster}
         className="h-full w-full"
         playsInline
-        crossOrigin={subtitleUrl ? "anonymous" : undefined}
         onClick={togglePlay}
       >
         {subtitleUrl && (

@@ -222,7 +222,9 @@ export default function RoomClient({ name, movies }: RoomClientProps) {
             src={currentMovie.url}
             poster={currentMovie.poster}
             title={currentMovie.title}
-            subtitleUrl={currentMovie.subtitleUrl}
+            subtitleUrl={
+              currentMovie.subtitleUrl ? `/api/subtitle?movieId=${currentMovie.id}` : undefined
+            }
             onUserPlay={(position) => sendAction("play", { position })}
             onUserPause={(position) => sendAction("pause", { position })}
             onUserSeek={(position) => sendAction("seek", { position })}
