@@ -7,7 +7,7 @@ function getSecretKey() {
   const secret = process.env.SESSION_SECRET;
   if (!secret) {
     throw new Error(
-      "SESSION_SECRET nu este setat. Adaugă-l în .env.local (vezi .env.example)."
+      "SESSION_SECRET is not set. Add it to .env.local (see .env.example)."
     );
   }
   return new TextEncoder().encode(secret);
@@ -18,7 +18,7 @@ export interface SessionPayload {
   [key: string]: unknown;
 }
 
-/** Creează un token de sesiune semnat, valabil 30 de zile. */
+/** Creates a signed session token, valid for 30 days. */
 export async function createSessionToken(name: string): Promise<string> {
   return new SignJWT({ name })
     .setProtectedHeader({ alg: ALG })
@@ -27,7 +27,7 @@ export async function createSessionToken(name: string): Promise<string> {
     .sign(getSecretKey());
 }
 
-/** Verifică și decodează un token de sesiune. Întoarce null dacă e invalid/expirat. */
+/** Verifies and decodes a session token. Returns null if invalid/expired. */
 export async function verifySessionToken(
   token: string
 ): Promise<SessionPayload | null> {

@@ -21,13 +21,13 @@ interface SyncRequestBody {
 export async function POST(req: NextRequest) {
   const token = req.cookies.get(SESSION_COOKIE)?.value;
   const session = token ? await verifySessionToken(token) : null;
-  const name = session?.name ?? "Spectator";
+  const name = session?.name ?? "Viewer";
 
   let body: SyncRequestBody;
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "Cerere invalidă" }, { status: 400 });
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 
   const { action, position, movieId, socketId } = body;
@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
       if (typeof position === "number") next.position = position;
       break;
     default:
-      return NextResponse.json({ error: "Acțiune necunoscută" }, { status: 400 });
+      return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   }
 
   await setRoomState(next);
@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
       socketId ? { socket_id: socketId } : undefined
     );
   } catch (err) {
-    console.error("Eroare la trimiterea evenimentului Pusher:", err);
+    console.error("Error sending Pusher event:", err);
   }
 
   return NextResponse.json(next);

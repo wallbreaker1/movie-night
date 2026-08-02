@@ -24,7 +24,7 @@ import {
 } from "./Icons";
 
 export interface VideoPlayerHandle {
-  /** Aliniază player-ul local la o stare autoritativă venită din server/Pusher. */
+  /** Aligns the local player with an authoritative state coming from the server/Pusher. */
   syncTo: (opts: { position: number; isPlaying: boolean }) => void;
   getCurrentTime: () => number;
 }
@@ -33,7 +33,7 @@ interface VideoPlayerProps {
   src: string;
   poster?: string;
   title?: string;
-  /** URL public către fișierul de subtitrare (WebVTT). Opțional. */
+  /** Public URL to the subtitle file (WebVTT). Optional. */
   subtitleUrl?: string;
   onUserPlay: (position: number) => void;
   onUserPause: (position: number) => void;
@@ -138,7 +138,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function Vid
     return () => document.removeEventListener("fullscreenchange", onFsChange);
   }, []);
 
-  // Sincronizează starea vizuală a subtitrărilor cu track-ul nativ al video-ului.
+  // Sync the visual subtitle state with the video's native track.
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !subtitleUrl) return;
@@ -227,7 +227,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function Vid
     };
   }, []);
 
-  // Scurtături de tastatură.
+  // Keyboard shortcuts.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement | null)?.tagName;
@@ -299,7 +299,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function Vid
 
       {justSynced && (
         <div className="absolute top-3 left-3 rounded-full bg-black/60 px-3 py-1 text-xs text-white/90 backdrop-blur">
-          sincronizat
+          synced
         </div>
       )}
 
@@ -347,7 +347,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function Vid
               seekTo(Number((e.target as HTMLInputElement).value));
             }}
             className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-            aria-label="Poziție video"
+            aria-label="Video position"
           />
         </div>
 
@@ -355,7 +355,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function Vid
           <button
             onClick={togglePlay}
             className="rounded-full p-1.5 hover:bg-white/10 transition"
-            aria-label={isPlaying ? "Pauză" : "Redă"}
+            aria-label={isPlaying ? "Pause" : "Play"}
           >
             {isPlaying ? <PauseIcon /> : <PlayIcon />}
           </button>
@@ -363,7 +363,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function Vid
           <button
             onClick={() => skip(-SKIP_SECONDS)}
             className="rounded-full p-1.5 hover:bg-white/10 transition"
-            aria-label={`Înapoi ${SKIP_SECONDS}s`}
+            aria-label={`Back ${SKIP_SECONDS}s`}
           >
             <SkipBackIcon className="h-5 w-5" />
           </button>
@@ -371,7 +371,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function Vid
           <button
             onClick={() => skip(SKIP_SECONDS)}
             className="rounded-full p-1.5 hover:bg-white/10 transition"
-            aria-label={`Înainte ${SKIP_SECONDS}s`}
+            aria-label={`Forward ${SKIP_SECONDS}s`}
           >
             <SkipForwardIcon className="h-5 w-5" />
           </button>
@@ -380,7 +380,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function Vid
             <button
               onClick={toggleMute}
               className="rounded-full p-1.5 hover:bg-white/10 transition"
-              aria-label={muted ? "Activează sunetul" : "Fără sunet"}
+              aria-label={muted ? "Unmute" : "Mute"}
             >
               {muted || volume === 0 ? <VolumeMuteIcon className="h-5 w-5" /> : <VolumeIcon className="h-5 w-5" />}
             </button>
@@ -392,7 +392,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function Vid
               value={muted ? 0 : volume}
               onChange={(e) => changeVolume(Number(e.target.value))}
               className="h-1 w-20 cursor-pointer accent-red-500"
-              aria-label="Volum"
+              aria-label="Volume"
             />
           </div>
 
@@ -408,7 +408,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function Vid
               className={`rounded-full p-1.5 transition hover:bg-white/10 ${
                 subtitlesOn ? "text-red-500" : "text-white"
               }`}
-              aria-label={subtitlesOn ? "Dezactivează subtitrări" : "Activează subtitrări"}
+              aria-label={subtitlesOn ? "Turn off subtitles" : "Turn on subtitles"}
               aria-pressed={subtitlesOn}
             >
               <SubtitlesIcon className="h-5 w-5" />
@@ -418,7 +418,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function Vid
           <button
             onClick={toggleFullscreen}
             className="rounded-full p-1.5 hover:bg-white/10 transition"
-            aria-label={isFullscreen ? "Ieși din ecran complet" : "Ecran complet"}
+            aria-label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
           >
             {isFullscreen ? <FullscreenExitIcon className="h-5 w-5" /> : <FullscreenIcon className="h-5 w-5" />}
           </button>

@@ -4,11 +4,11 @@ import { getMovies } from "./movies";
 export interface RoomState {
   movieId: string | null;
   isPlaying: boolean;
-  /** Poziția în secunde la momentul updatedAt. */
+  /** Position in seconds at the updatedAt timestamp. */
   position: number;
-  /** Timestamp (ms) la care a fost calculată această stare. */
+  /** Timestamp (ms) when this state was computed. */
   updatedAt: number;
-  /** Numele afișat al ultimei persoane care a făcut o acțiune. */
+  /** Display name of the last person who performed an action. */
   updatedBy: string;
 }
 
@@ -37,7 +37,7 @@ export async function setRoomState(state: RoomState): Promise<void> {
   await redis.set(STATE_KEY, state);
 }
 
-/** Calculează poziția curentă estimată, ținând cont de timpul scurs dacă e pe play. */
+/** Computes the estimated current position, accounting for elapsed time if playing. */
 export function computeLivePosition(state: RoomState): number {
   if (!state.isPlaying) return state.position;
   const elapsed = (Date.now() - state.updatedAt) / 1000;

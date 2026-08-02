@@ -1,9 +1,9 @@
 import { Redis } from "@upstash/redis";
 
 /**
- * Client Redis (Upstash) folosit ca sursă unică de adevăr pentru starea camerei
- * (ce film rulează, poziția curentă, dacă e pe play/pause).
+ * Redis client (Upstash) used as the single source of truth for the room state
+ * (which movie is playing, current position, whether it's playing/paused).
  *
- * Necesită variabilele de mediu UPSTASH_REDIS_REST_URL și UPSTASH_REDIS_REST_TOKEN.
+ * Requires the UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN environment variables.
  */
 export const redis = Redis.fromEnv();

@@ -1,11 +1,11 @@
-/** Numele canalului de prezență Pusher folosit pentru camera de vizionare. */
+/** Name of the Pusher presence channel used for the viewing room. */
 export const ROOM_CHANNEL = "presence-movie-room";
 
-/** Evenimentul prin care serverul trimite starea curentă a playerului tuturor clienților. */
+/** Event through which the server sends the current player state to all clients. */
 export const STATE_EVENT = "state-updated";
 
-/** Interval (ms) la care un client redă poziția curentă către server pentru corectarea drift-ului. */
+/** Interval (ms) at which a client reports its current position to the server to correct drift. */
 export const HEARTBEAT_INTERVAL_MS = 20_000;
 
-/** Diferența maximă (secunde) tolerată înainte de a re-sincroniza forțat poziția video-ului. */
+/** Maximum difference (seconds) tolerated before force re-syncing the video position. */
 export const DRIFT_TOLERANCE_SECONDS = 1.2;

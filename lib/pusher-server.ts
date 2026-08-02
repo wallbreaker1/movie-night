@@ -1,10 +1,10 @@
 import PusherServer from "pusher";
 
 /**
- * Client Pusher (server-side) folosit pentru a trimite evenimente de sincronizare
- * (play/pause/seek/schimbare film) tuturor spectatorilor conectați.
+ * Pusher client (server-side) used to send synchronization events
+ * (play/pause/seek/movie change) to all connected viewers.
  *
- * Necesită PUSHER_APP_ID, NEXT_PUBLIC_PUSHER_KEY, PUSHER_SECRET, NEXT_PUBLIC_PUSHER_CLUSTER.
+ * Requires PUSHER_APP_ID, NEXT_PUBLIC_PUSHER_KEY, PUSHER_SECRET, NEXT_PUBLIC_PUSHER_CLUSTER.
  */
 export const pusherServer = new PusherServer({
   appId: process.env.PUSHER_APP_ID!,

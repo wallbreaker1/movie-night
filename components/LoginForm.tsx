@@ -22,14 +22,14 @@ export default function LoginForm() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error ?? "Eroare la autentificare.");
+        setError(data.error ?? "Authentication error.");
         setLoading(false);
         return;
       }
       router.push("/");
       router.refresh();
     } catch {
-      setError("Eroare de rețea. Încearcă din nou.");
+      setError("Network error. Please try again.");
       setLoading(false);
     }
   }
@@ -41,12 +41,12 @@ export default function LoginForm() {
     >
       <div className="text-center">
         <h1 className="text-2xl font-semibold text-white">🎬 Movie Night</h1>
-        <p className="mt-1 text-sm text-white/50">Introdu parola pentru a intra în cameră</p>
+        <p className="mt-1 text-sm text-white/50">Enter the password to join the room</p>
       </div>
 
       <div className="flex flex-col gap-1.5">
         <label htmlFor="name" className="text-xs text-white/60">
-          Numele tău (opțional)
+          Your name (optional)
         </label>
         <input
           id="name"
@@ -54,14 +54,14 @@ export default function LoginForm() {
           value={name}
           maxLength={24}
           onChange={(e) => setName(e.target.value)}
-          placeholder="ex: Andrei"
+          placeholder="e.g. Alex"
           className="rounded-lg border border-white/15 bg-black/30 px-3 py-2 text-sm text-white outline-none transition focus:border-red-500"
         />
       </div>
 
       <div className="flex flex-col gap-1.5">
         <label htmlFor="password" className="text-xs text-white/60">
-          Parolă
+          Password
         </label>
         <input
           id="password"
@@ -82,7 +82,7 @@ export default function LoginForm() {
         disabled={loading}
         className="mt-1 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-500 disabled:opacity-50"
       >
-        {loading ? "Se verifică..." : "Intră"}
+        {loading ? "Checking..." : "Enter"}
       </button>
     </form>
   );

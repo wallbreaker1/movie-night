@@ -52,7 +52,7 @@ export default function RoomClient({ name, movies }: RoomClientProps) {
           body: JSON.stringify({ action, socketId, ...extra }),
         });
       } catch (err) {
-        console.error("Nu am putut trimite acțiunea:", err);
+        console.error("Failed to send action:", err);
       }
     },
     []
@@ -81,7 +81,7 @@ export default function RoomClient({ name, movies }: RoomClientProps) {
     const key = process.env.NEXT_PUBLIC_PUSHER_KEY;
     const cluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER;
     if (!key || !cluster) {
-      console.error("NEXT_PUBLIC_PUSHER_KEY / NEXT_PUBLIC_PUSHER_CLUSTER lipsesc.");
+      console.error("NEXT_PUBLIC_PUSHER_KEY / NEXT_PUBLIC_PUSHER_CLUSTER are missing.");
       return () => {
         cancelled = true;
       };
@@ -100,12 +100,12 @@ export default function RoomClient({ name, movies }: RoomClientProps) {
       "pusher:subscription_succeeded",
       (members: { each: (cb: (m: PresenceMember) => void) => void }) => {
         const list: Viewer[] = [];
-        members.each((m) => list.push({ id: m.id, name: m.info?.name ?? "Spectator" }));
+        members.each((m) => list.push({ id: m.id, name: m.info?.name ?? "Viewer" }));
         setViewers(list);
       }
     );
     channel.bind("pusher:member_added", (member: PresenceMember) => {
-      setViewers((prev) => [...prev, { id: member.id, name: member.info?.name ?? "Spectator" }]);
+      setViewers((prev) => [...prev, { id: member.id, name: member.info?.name ?? "Viewer" }]);
     });
     channel.bind("pusher:member_removed", (member: PresenceMember) => {
       setViewers((prev) => prev.filter((v) => v.id !== member.id));
@@ -123,7 +123,7 @@ export default function RoomClient({ name, movies }: RoomClientProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Odată ce avem și starea inițială și player-ul montat, aliniem poziția video-ului.
+  // Once we have both the initial state and the mounted player, align the video position.
   useEffect(() => {
     if (state && ready) {
       playerRef.current?.syncTo({
@@ -134,7 +134,7 @@ export default function RoomClient({ name, movies }: RoomClientProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, currentMovie?.id]);
 
-  // Heartbeat periodic pentru corectarea drift-ului la sesiuni lungi.
+  // Periodic heartbeat to correct drift during long sessions.
   useEffect(() => {
     if (!state?.isPlaying) return;
     const interval = setInterval(() => {
@@ -160,28 +160,28 @@ export default function RoomClient({ name, movies }: RoomClientProps) {
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold sm:text-xl">🎬 Movie Night</h1>
-          <p className="text-xs text-white/50">Salut, {name}</p>
+          <p className="text-xs text-white/50">Hi, {name}</p>
         </div>
 
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5 rounded-full bg-white/5 px-3 py-1.5 text-xs text-white/80">
             <UsersIcon className="h-4 w-4" />
-            {viewers.length} conectați
+            {viewers.length} online
           </div>
           <button
             onClick={handleManualResync}
             className="flex items-center gap-1.5 rounded-full bg-white/5 px-3 py-1.5 text-xs text-white/80 transition hover:bg-white/10"
-            title="Sincronizează-mă cu ceilalți"
+            title="Sync me with others"
           >
             <SyncIcon className="h-4 w-4" />
-            Sincronizează
+            Sync
           </button>
           <button
             onClick={handleLogout}
             className="flex items-center gap-1.5 rounded-full bg-white/5 px-3 py-1.5 text-xs text-white/80 transition hover:bg-white/10"
           >
             <LogOutIcon className="h-4 w-4" />
-            Ieși
+            Leave
           </button>
         </div>
       </header>
@@ -198,10 +198,10 @@ export default function RoomClient({ name, movies }: RoomClientProps) {
 
       {!currentMovie ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-white/15 p-12 text-center text-white/60">
-          <p className="text-base font-medium">Niciun film configurat</p>
+          <p className="text-base font-medium">No movie configured</p>
           <p className="max-w-md text-sm">
-            Setează variabila de mediu <code className="rounded bg-white/10 px-1">MOVIES_JSON</code> cu
-            lista de filme (id, titlu, URL public din Cloudflare R2).
+            Set the <code className="rounded bg-white/10 px-1">MOVIES_JSON</code> environment variable
+            with the list of movies (id, title, public URL from Cloudflare R2).
           </p>
         </div>
       ) : (
@@ -213,7 +213,7 @@ export default function RoomClient({ name, movies }: RoomClientProps) {
               onSelect={(id) => sendAction("load", { movieId: id })}
             />
             {state?.updatedBy && state.updatedBy !== "system" && (
-              <span className="text-xs text-white/40">ultima acțiune: {state.updatedBy}</span>
+              <span className="text-xs text-white/40">last action: {state.updatedBy}</span>
             )}
           </div>
 
@@ -231,7 +231,7 @@ export default function RoomClient({ name, movies }: RoomClientProps) {
       )}
 
       <p className="mt-auto pt-2 text-center text-[11px] text-white/30">
-        Spațiu • K = play/pause · ← → = -10s/+10s · M = mut · F = ecran complet
+        Space • K = play/pause · ← → = -10s/+10s · M = mute · F = fullscreen
       </p>
     </div>
   );

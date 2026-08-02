@@ -1,19 +1,19 @@
 export interface Movie {
   id: string;
   title: string;
-  /** URL public (Cloudflare R2 / custom domain) către fișierul video. */
+  /** Public URL (Cloudflare R2 / custom domain) to the video file. */
   url: string;
   poster?: string;
-  /** URL public către fișierul de subtitrare (format WebVTT, .vtt). */
+  /** Public URL to the subtitle file (WebVTT format, .vtt). */
   subtitleUrl?: string;
 }
 
 /**
- * Lista de filme disponibile este configurată prin variabila de mediu MOVIES_JSON,
- * un array JSON cu obiecte { id, title, url, poster? }.
+ * The list of available movies is configured via the MOVIES_JSON environment
+ * variable, a JSON array of objects { id, title, url, poster? }.
  *
- * Exemplu:
- * MOVIES_JSON=[{"id":"film1","title":"Filmul Nostru","url":"https://pub-xxxx.r2.dev/film1.mp4"}]
+ * Example:
+ * MOVIES_JSON=[{"id":"movie1","title":"Our Movie","url":"https://pub-xxxx.r2.dev/movie1.mp4"}]
  */
 export function getMovies(): Movie[] {
   const raw = process.env.MOVIES_JSON;
@@ -30,7 +30,7 @@ export function getMovies(): Movie[] {
         (m.subtitleUrl === undefined || typeof m.subtitleUrl === "string")
     );
   } catch (err) {
-    console.error("MOVIES_JSON este JSON invalid:", err);
+    console.error("MOVIES_JSON is invalid JSON:", err);
     return [];
   }
 }

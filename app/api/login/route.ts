@@ -6,7 +6,7 @@ export async function POST(req: NextRequest) {
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "Cerere invalidă" }, { status: 400 });
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 
   const { password, name } = body;
@@ -16,16 +16,16 @@ export async function POST(req: NextRequest) {
 
   if (validPasswords.length === 0) {
     return NextResponse.json(
-      { error: "Nicio parolă configurată pe server (APP_PASSWORD_1 / APP_PASSWORD_2)." },
+      { error: "No password configured on the server (APP_PASSWORD_1 / APP_PASSWORD_2)." },
       { status: 500 }
     );
   }
 
   if (!password || !validPasswords.includes(password)) {
-    return NextResponse.json({ error: "Parolă greșită." }, { status: 401 });
+    return NextResponse.json({ error: "Wrong password." }, { status: 401 });
   }
 
-  const displayName = (name ?? "").toString().trim().slice(0, 24) || "Spectator";
+  const displayName = (name ?? "").toString().trim().slice(0, 24) || "Viewer";
   const token = await createSessionToken(displayName);
 
   const res = NextResponse.json({ ok: true, name: displayName });

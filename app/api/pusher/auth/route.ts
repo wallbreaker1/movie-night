@@ -3,16 +3,16 @@ import { pusherServer } from "@/lib/pusher-server";
 import { verifySessionToken, SESSION_COOKIE } from "@/lib/auth";
 
 /**
- * Endpoint de autorizare pentru canalul de prezență Pusher.
- * Middleware-ul deja blochează cererile neautentificate, dar verificăm din nou aici
- * pentru claritate și pentru a extrage numele afișat al utilizatorului.
+ * Authorization endpoint for the Pusher presence channel.
+ * The proxy already blocks unauthenticated requests, but we check again here
+ * for clarity and to extract the user's display name.
  */
 export async function POST(req: NextRequest) {
   const token = req.cookies.get(SESSION_COOKIE)?.value;
   const session = token ? await verifySessionToken(token) : null;
 
   if (!session) {
-    return NextResponse.json({ error: "Neautentificat" }, { status: 401 });
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const formData = await req.formData();
@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
   const channel = formData.get("channel_name");
 
   if (typeof socketId !== "string" || typeof channel !== "string") {
-    return NextResponse.json({ error: "Cerere invalidă" }, { status: 400 });
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 
   const presenceData = {
