@@ -11,7 +11,6 @@ import type { Movie } from "@/lib/movies";
 import type { RoomState } from "@/lib/state";
 
 interface RoomClientProps {
-  name: string;
   isHost: boolean;
   movies: Movie[];
 }
@@ -32,7 +31,7 @@ function computeLivePosition(state: RoomState): number {
   return state.position + Math.max(elapsed, 0);
 }
 
-export default function RoomClient({ name, isHost, movies }: RoomClientProps) {
+export default function RoomClient({ isHost, movies }: RoomClientProps) {
   const [state, setState] = useState<RoomState | null>(null);
   const [viewers, setViewers] = useState<Viewer[]>([]);
   const [ready, setReady] = useState(false);
@@ -167,9 +166,8 @@ export default function RoomClient({ name, isHost, movies }: RoomClientProps) {
         <div>
           <h1 className="text-lg font-semibold sm:text-xl">🎬 Movie Night</h1>
           <p className="text-xs text-white/50">
-            Hi, {name}{" "}
             <span
-              className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+              className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
                 isHost ? "bg-red-500/20 text-red-400" : "bg-white/10 text-white/60"
               }`}
             >
@@ -228,9 +226,6 @@ export default function RoomClient({ name, isHost, movies }: RoomClientProps) {
               onSelect={(id) => sendAction("load", { movieId: id })}
               disabled={!isHost}
             />
-            {state?.updatedBy && state.updatedBy !== "system" && (
-              <span className="text-xs text-white/40">last action: {state.updatedBy}</span>
-            )}
           </div>
 
           <VideoPlayer

@@ -17,7 +17,7 @@ export default async function Home() {
 
   return (
     <main className="flex-1 bg-neutral-950">
-      <RoomClient name={session.name} isHost={session.isHost} movies={movies} />
+      <RoomClient isHost={session.isHost} movies={movies} />
     </main>
   );
 }

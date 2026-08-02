@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 
 export default function LoginForm() {
   const router = useRouter();
-  const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -18,7 +17,7 @@ export default function LoginForm() {
       const res = await fetch("/api/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password, name }),
+        body: JSON.stringify({ password }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -42,21 +41,6 @@ export default function LoginForm() {
       <div className="text-center">
         <h1 className="text-2xl font-semibold text-white">🎬 Movie Night</h1>
         <p className="mt-1 text-sm text-white/50">Enter the password to join the room</p>
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="name" className="text-xs text-white/60">
-          Your name (optional)
-        </label>
-        <input
-          id="name"
-          type="text"
-          value={name}
-          maxLength={24}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="e.g. Alex"
-          className="rounded-lg border border-white/15 bg-black/30 px-3 py-2 text-sm text-white outline-none transition focus:border-red-500"
-        />
       </div>
 
       <div className="flex flex-col gap-1.5">

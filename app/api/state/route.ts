@@ -71,6 +71,14 @@ export async function POST(req: NextRequest) {
 
   await setRoomState(next);
 
+  // Heartbeat only updates Redis silently (so new joiners get the correct
+  // position via GET /api/state). It must NOT broadcast via Pusher — clients
+  // who are already playing don't need to be re-synced every 20 seconds, and
+  // doing so causes jump-backs when there's any request latency.
+  if (action === "heartbeat") {
+    return NextResponse.json(next);
+  }
+
   try {
     await pusherServer.trigger(
       ROOM_CHANNEL,

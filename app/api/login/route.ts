@@ -2,14 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSessionToken, SESSION_COOKIE } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
-  let body: { password?: string; name?: string };
+  let body: { password?: string };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 
-  const { password, name } = body;
+  const { password } = body;
   const password1 = process.env.APP_PASSWORD_1;
   const password2 = process.env.APP_PASSWORD_2;
   const validPasswords = [password1, password2].filter(
@@ -32,10 +32,10 @@ export async function POST(req: NextRequest) {
   // read-only guest that just watches in sync.
   const isHost = Boolean(password1 && password === password1);
 
-  const displayName = (name ?? "").toString().trim().slice(0, 24) || "Viewer";
+  const displayName = isHost ? "Host" : "Guest";
   const token = await createSessionToken(displayName, isHost);
 
-  const res = NextResponse.json({ ok: true, name: displayName, isHost });
+  const res = NextResponse.json({ ok: true, isHost });
   res.cookies.set(SESSION_COOKIE, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
