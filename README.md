@@ -3,15 +3,22 @@
 A Next.js app for watching movies in sync, in real time, with friends. The video
 is hosted on Cloudflare R2, play/pause/seek synchronization goes through Pusher
 Channels, and the shared "room" state is kept in Upstash Redis. Simple
-authentication: two hardcoded passwords (via environment variables), either one
-grants full access.
+authentication: two hardcoded passwords (via environment variables).
+`APP_PASSWORD_1` is the **host** (master) with full playback control;
+`APP_PASSWORD_2` is a **guest** who watches in sync but can't control playback.
 
 ## How it works
 
 - **Authentication** — the [/login](app/login/page.tsx) page checks the entered
-  password against `APP_PASSWORD_1` / `APP_PASSWORD_2`. On success, a signed
-  httpOnly cookie is issued (JWT, via [`jose`](https://github.com/panva/jose)),
-  valid for 30 days. [proxy.ts](proxy.ts) protects the rest of the routes.
+  password against `APP_PASSWORD_1` / `APP_PASSWORD_2`. Whichever one matches
+  determines the session's role: `APP_PASSWORD_1` grants the host role
+  (`isHost: true`), `APP_PASSWORD_2` grants the guest role (`isHost: false`).
+  On success, a signed httpOnly cookie is issued (JWT, via
+  [`jose`](https://github.com/panva/jose)) carrying this role, valid for 30
+  days. [proxy.ts](proxy.ts) protects the rest of the routes;
+  [/api/state](app/api/state/route.ts) additionally rejects any mutating
+  request from a non-host session with 403, so the restriction can't be
+  bypassed by tampering with the client.
 - **Player** — [components/VideoPlayer.tsx](components/VideoPlayer.tsx) is a
   custom video player (play/pause, ±10s, volume, progress, fullscreen, keyboard
   shortcuts, subtitles).
@@ -92,10 +99,12 @@ Open [http://localhost:3000](http://localhost:3000) — you'll be redirected to
 
 ## Notes on synchronization
 
-- Anyone authenticated can control playback (there's no separate "host" role);
-  the last action wins and is propagated to everyone.
-- Every 20 seconds of playback, the active client sends a "heartbeat" with the
-  current position, to correct drift during long sessions.
+- Only the **host** (`APP_PASSWORD_1`) can control playback (play/pause/seek/
+  change movie); guests (`APP_PASSWORD_2`) watch in sync, read-only. This is
+  enforced both in the UI (controls are disabled) and server-side (the
+  `/api/state` endpoint rejects mutating requests from non-host sessions).
+- Every 20 seconds of playback, the host sends a "heartbeat" with the current
+  position, to correct drift during long sessions.
 - The **Sync** button in the header forces a manual re-alignment with the
   server state, useful if someone experienced buffering.
 

@@ -15,12 +15,16 @@ function getSecretKey() {
 
 export interface SessionPayload {
   name: string;
+  /** Whether this session is the "host" (logged in with APP_PASSWORD_1) and
+   * therefore allowed to control playback (play/pause/seek/change movie).
+   * Guests (APP_PASSWORD_2) can only watch in sync, read-only. */
+  isHost: boolean;
   [key: string]: unknown;
 }
 
 /** Creates a signed session token, valid for 30 days. */
-export async function createSessionToken(name: string): Promise<string> {
-  return new SignJWT({ name })
+export async function createSessionToken(name: string, isHost: boolean): Promise<string> {
+  return new SignJWT({ name, isHost })
     .setProtectedHeader({ alg: ALG })
     .setIssuedAt()
     .setExpirationTime("30d")
@@ -34,7 +38,7 @@ export async function verifySessionToken(
   try {
     const { payload } = await jwtVerify(token, getSecretKey());
     if (typeof payload.name !== "string") return null;
-    return payload as SessionPayload;
+    return { ...payload, isHost: Boolean(payload.isHost) } as SessionPayload;
   } catch {
     return null;
   }

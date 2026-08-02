@@ -10,7 +10,9 @@ export async function POST(req: NextRequest) {
   }
 
   const { password, name } = body;
-  const validPasswords = [process.env.APP_PASSWORD_1, process.env.APP_PASSWORD_2].filter(
+  const password1 = process.env.APP_PASSWORD_1;
+  const password2 = process.env.APP_PASSWORD_2;
+  const validPasswords = [password1, password2].filter(
     (p): p is string => Boolean(p && p.length > 0)
   );
 
@@ -25,10 +27,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Wrong password." }, { status: 401 });
   }
 
-  const displayName = (name ?? "").toString().trim().slice(0, 24) || "Viewer";
-  const token = await createSessionToken(displayName);
+  // APP_PASSWORD_1 is the "host" (master) password: only that account can
+  // control playback (play/pause/seek/change movie). APP_PASSWORD_2 is a
+  // read-only guest that just watches in sync.
+  const isHost = Boolean(password1 && password === password1);
 
-  const res = NextResponse.json({ ok: true, name: displayName });
+  const displayName = (name ?? "").toString().trim().slice(0, 24) || "Viewer";
+  const token = await createSessionToken(displayName, isHost);
+
+  const res = NextResponse.json({ ok: true, name: displayName, isHost });
   res.cookies.set(SESSION_COOKIE, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",

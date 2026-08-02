@@ -12,6 +12,7 @@ import type { RoomState } from "@/lib/state";
 
 interface RoomClientProps {
   name: string;
+  isHost: boolean;
   movies: Movie[];
 }
 
@@ -31,11 +32,10 @@ function computeLivePosition(state: RoomState): number {
   return state.position + Math.max(elapsed, 0);
 }
 
-export default function RoomClient({ name, movies }: RoomClientProps) {
+export default function RoomClient({ name, isHost, movies }: RoomClientProps) {
   const [state, setState] = useState<RoomState | null>(null);
   const [viewers, setViewers] = useState<Viewer[]>([]);
   const [ready, setReady] = useState(false);
-  const [ownId, setOwnId] = useState<string | null>(null);
 
   const playerRef = useRef<VideoPlayerHandle>(null);
   const pusherRef = useRef<Pusher | null>(null);
@@ -43,23 +43,11 @@ export default function RoomClient({ name, movies }: RoomClientProps) {
 
   const currentMovie = movies.find((m) => m.id === state?.movieId) ?? movies[0] ?? null;
 
-  /**
-   * There is no single fixed "master" client. Any connected client can send
-   * play/pause/seek/load actions and they take effect immediately for
-   * everyone (last action wins). However, if more than one device/tab is
-   * connected at the same time and left playing, each one independently
-   * sending periodic heartbeats (used only to correct clock drift on long
-   * sessions) would otherwise fight over the position. To avoid that, we
-   * deterministically elect exactly one connected client — the one with the
-   * lexicographically smallest presence id — as the sole heartbeat sender.
-   * Every client computes the same leader independently from the shared
-   * presence member list, so no server-side coordination is needed.
-   */
-  const isLeader =
-    ownId !== null && (viewers.length === 0 || [...viewers.map((v) => v.id)].sort()[0] === ownId);
-
   const sendAction = useCallback(
     async (action: string, extra: Record<string, unknown> = {}) => {
+      // Guests can't control playback; the server would reject this anyway,
+      // but we skip the request client-side too.
+      if (!isHost) return;
       const socketId = pusherRef.current?.connection.socket_id;
       try {
         await fetch("/api/state", {
@@ -71,7 +59,7 @@ export default function RoomClient({ name, movies }: RoomClientProps) {
         console.error("Failed to send action:", err);
       }
     },
-    []
+    [isHost]
   );
 
   const applyState = useCallback((data: RoomState) => {
@@ -114,11 +102,10 @@ export default function RoomClient({ name, movies }: RoomClientProps) {
 
     channel.bind(
       "pusher:subscription_succeeded",
-      (members: { each: (cb: (m: PresenceMember) => void) => void; myID?: string }) => {
+      (members: { each: (cb: (m: PresenceMember) => void) => void }) => {
         const list: Viewer[] = [];
         members.each((m) => list.push({ id: m.id, name: m.info?.name ?? "Viewer" }));
         setViewers(list);
-        if (members.myID) setOwnId(members.myID);
       }
     );
     channel.bind("pusher:member_added", (member: PresenceMember) => {
@@ -151,17 +138,17 @@ export default function RoomClient({ name, movies }: RoomClientProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, currentMovie?.id]);
 
-  // Periodic heartbeat to correct drift during long sessions. Only the
-  // elected leader sends it, so multiple simultaneously-open devices don't
-  // fight over the playback position.
+  // Periodic heartbeat to correct drift during long sessions. Only the host
+  // sends it, since only the host's session is the source of truth for
+  // playback — guests never mutate state.
   useEffect(() => {
-    if (!state?.isPlaying || !isLeader) return;
+    if (!state?.isPlaying || !isHost) return;
     const interval = setInterval(() => {
       const t = playerRef.current?.getCurrentTime();
       if (typeof t === "number") sendAction("heartbeat", { position: t });
     }, HEARTBEAT_INTERVAL_MS);
     return () => clearInterval(interval);
-  }, [state?.isPlaying, isLeader, sendAction]);
+  }, [state?.isPlaying, isHost, sendAction]);
 
   const handleManualResync = useCallback(() => {
     fetch("/api/state")
@@ -179,7 +166,16 @@ export default function RoomClient({ name, movies }: RoomClientProps) {
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold sm:text-xl">🎬 Movie Night</h1>
-          <p className="text-xs text-white/50">Hi, {name}</p>
+          <p className="text-xs text-white/50">
+            Hi, {name}{" "}
+            <span
+              className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                isHost ? "bg-red-500/20 text-red-400" : "bg-white/10 text-white/60"
+              }`}
+            >
+              {isHost ? "Host" : "Guest"}
+            </span>
+          </p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -230,6 +226,7 @@ export default function RoomClient({ name, movies }: RoomClientProps) {
               movies={movies}
               currentId={currentMovie.id}
               onSelect={(id) => sendAction("load", { movieId: id })}
+              disabled={!isHost}
             />
             {state?.updatedBy && state.updatedBy !== "system" && (
               <span className="text-xs text-white/40">last action: {state.updatedBy}</span>
@@ -244,6 +241,7 @@ export default function RoomClient({ name, movies }: RoomClientProps) {
             subtitleUrl={
               currentMovie.subtitleUrl ? `/api/subtitle?movieId=${currentMovie.id}` : undefined
             }
+            canControl={isHost}
             onUserPlay={(position) => sendAction("play", { position })}
             onUserPause={(position) => sendAction("pause", { position })}
             onUserSeek={(position) => sendAction("seek", { position })}
@@ -252,7 +250,9 @@ export default function RoomClient({ name, movies }: RoomClientProps) {
       )}
 
       <p className="mt-auto pt-2 text-center text-[11px] text-white/30">
-        Space • K = play/pause · ← → = -10s/+10s · M = mute · F = fullscreen
+        {isHost
+          ? "Space • K = play/pause · ← → = -10s/+10s · M = mute · F = fullscreen"
+          : "Guest mode: you're watching in sync — only the host controls playback"}
       </p>
     </div>
   );

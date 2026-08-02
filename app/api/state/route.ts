@@ -31,6 +31,17 @@ export async function POST(req: NextRequest) {
   }
 
   const { action, position, movieId, socketId } = body;
+
+  // Only the host (logged in with APP_PASSWORD_1) can control playback.
+  // Guests can watch in sync but every mutating action is rejected here,
+  // regardless of what the client UI allows, so this can't be bypassed.
+  if (!session?.isHost) {
+    return NextResponse.json(
+      { error: "Only the host can control playback." },
+      { status: 403 }
+    );
+  }
+
   const current = await getRoomState();
   const next: RoomState = { ...current, updatedAt: Date.now(), updatedBy: name };
 

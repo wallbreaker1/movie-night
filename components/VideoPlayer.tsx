@@ -58,6 +58,11 @@ interface VideoPlayerProps {
   title?: string;
   /** Public URL to the subtitle file (WebVTT). Optional. */
   subtitleUrl?: string;
+  /** Whether this client is allowed to control playback (host). Guests can
+   * still watch in sync, mute/unmute, adjust volume, toggle subtitles and
+   * fullscreen locally, but play/pause/seek/skip are disabled since they'd
+   * be rejected by the server anyway. Defaults to true. */
+  canControl?: boolean;
   onUserPlay: (position: number) => void;
   onUserPause: (position: number) => void;
   onUserSeek: (position: number) => void;
@@ -66,7 +71,7 @@ interface VideoPlayerProps {
 const SKIP_SECONDS = 10;
 
 const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function VideoPlayer(
-  { src, poster, title, subtitleUrl, onUserPlay, onUserPause, onUserSeek },
+  { src, poster, title, subtitleUrl, canControl = true, onUserPlay, onUserPause, onUserSeek },
   ref
 ) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -196,6 +201,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function Vid
   }, []);
 
   const togglePlay = useCallback(() => {
+    if (!canControl) return;
     const video = videoRef.current;
     if (!video) return;
     if (video.paused) {
@@ -205,10 +211,11 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function Vid
       video.pause();
       onUserPause(video.currentTime);
     }
-  }, [onUserPlay, onUserPause]);
+  }, [canControl, onUserPlay, onUserPause]);
 
   const seekTo = useCallback(
     (time: number) => {
+      if (!canControl) return;
       const video = videoRef.current;
       if (!video) return;
       const clamped = Math.min(Math.max(time, 0), duration || video.duration || time);
@@ -216,7 +223,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function Vid
       setCurrentTime(clamped);
       onUserSeek(clamped);
     },
-    [duration, onUserSeek]
+    [canControl, duration, onUserSeek]
   );
 
   const skip = useCallback(
@@ -302,15 +309,15 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function Vid
         case "Space":
         case "KeyK":
           e.preventDefault();
-          togglePlay();
+          if (canControl) togglePlay();
           break;
         case "ArrowLeft":
           e.preventDefault();
-          skip(-SKIP_SECONDS);
+          if (canControl) skip(-SKIP_SECONDS);
           break;
         case "ArrowRight":
           e.preventDefault();
-          skip(SKIP_SECONDS);
+          if (canControl) skip(SKIP_SECONDS);
           break;
         case "KeyM":
           toggleMute();
@@ -322,7 +329,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function Vid
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [togglePlay, skip, toggleMute, toggleFullscreen]);
+  }, [canControl, togglePlay, skip, toggleMute, toggleFullscreen]);
 
   const displayedTime = isScrubbing ? scrubTime : currentTime;
   const progressPct = duration > 0 ? (displayedTime / duration) * 100 : 0;
@@ -341,7 +348,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function Vid
         poster={poster}
         className="h-full w-full"
         playsInline
-        onClick={togglePlay}
+        onClick={() => canControl && togglePlay()}
       >
         {subtitleUrl && (
           <track
@@ -398,6 +405,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function Vid
             max={duration || 0}
             step={0.1}
             value={displayedTime}
+            disabled={!canControl}
             onChange={(e) => {
               setIsScrubbing(true);
               setScrubTime(Number(e.target.value));
@@ -410,7 +418,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function Vid
               setIsScrubbing(false);
               seekTo(Number((e.target as HTMLInputElement).value));
             }}
-            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+            className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-default"
             aria-label="Video position"
           />
         </div>
@@ -418,7 +426,8 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function Vid
         <div className="flex items-center gap-3 text-white">
           <button
             onClick={togglePlay}
-            className="rounded-full p-1.5 hover:bg-white/10 transition"
+            disabled={!canControl}
+            className="rounded-full p-1.5 hover:bg-white/10 transition disabled:opacity-30 disabled:hover:bg-transparent"
             aria-label={isPlaying ? "Pause" : "Play"}
           >
             {isPlaying ? <PauseIcon /> : <PlayIcon />}
@@ -426,7 +435,8 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function Vid
 
           <button
             onClick={() => skip(-SKIP_SECONDS)}
-            className="rounded-full p-1.5 hover:bg-white/10 transition"
+            disabled={!canControl}
+            className="rounded-full p-1.5 hover:bg-white/10 transition disabled:opacity-30 disabled:hover:bg-transparent"
             aria-label={`Back ${SKIP_SECONDS}s`}
           >
             <SkipBackIcon className="h-5 w-5" />
@@ -434,7 +444,8 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function Vid
 
           <button
             onClick={() => skip(SKIP_SECONDS)}
-            className="rounded-full p-1.5 hover:bg-white/10 transition"
+            disabled={!canControl}
+            className="rounded-full p-1.5 hover:bg-white/10 transition disabled:opacity-30 disabled:hover:bg-transparent"
             aria-label={`Forward ${SKIP_SECONDS}s`}
           >
             <SkipForwardIcon className="h-5 w-5" />
