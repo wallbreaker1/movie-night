@@ -1,36 +1,98 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🎬 Movie Night
 
-## Getting Started
+Aplicație Next.js pentru vizionare sincronizată de filme, în timp real, alături de
+prieteni. Video-ul este stocat în Cloudflare R2, sincronizarea play/pause/seek se
+face prin Pusher Channels, iar starea partajată a "camerei" e ținută în Upstash
+Redis. Autentificare simplistă: două parole hardcodate (prin variabile de mediu),
+oricare dintre ele oferă acces complet.
 
-First, run the development server:
+## Cum funcționează
+
+- **Autentificare** — pagina [/login](app/login/page.tsx) verifică parola introdusă
+  împotriva `APP_PASSWORD_1` / `APP_PASSWORD_2`. La succes se emite un cookie
+  httpOnly semnat (JWT, via [`jose`](https://github.com/panva/jose)) valabil 30 zile.
+  [middleware.ts](middleware.ts) protejează restul rutelor.
+- **Player** — [components/VideoPlayer.tsx](components/VideoPlayer.tsx) e un player
+  video custom (play/pause, ±10s, volum, progres, fullscreen, scurtături de tastatură).
+- **Sincronizare realtime** — orice acțiune (play/pause/seek/schimbare film) e trimisă
+  către [/api/state](app/api/state/route.ts), care actualizează starea în Redis și
+  publică evenimentul pe canalul Pusher `presence-movie-room`. Toți ceilalți clienți
+  primesc evenimentul și își aliniază player-ul local (cu toleranță de drift).
+  La intrare în cameră, fiecare client preia starea curentă din `/api/state` (GET),
+  astfel încât cine se alătură mai târziu vede filmul din poziția corectă.
+- **Video din R2** — `src`-ul din `<video>` este pur și simplu URL-ul public din R2
+  (bucket public sau custom domain), deci suportă nativ HTTP Range requests
+  (necesare pentru seek/scrubbing) fără niciun proxy.
+
+## Setup
+
+### 1. Cloudflare R2
+
+1. Creează un bucket R2 și încarcă fișierele video (mp4 recomandat, H.264/AAC pentru
+   compatibilitate maximă în browser).
+2. Activează acces public pentru bucket (fie domeniul `pub-xxxx.r2.dev`, fie un
+   custom domain conectat la bucket din dashboard-ul Cloudflare).
+3. Notează URL-urile publice ale fișierelor — le pui în `MOVIES_JSON`.
+
+> Dacă vrei ca link-urile video să nu fie ghicibile, folosește nume de fișier greu
+> de ghicit (UUID). Oricine cunoaște URL-ul direct poate accesa fișierul fără parolă
+> — e o compromitere acceptată explicit, dat fiind că aplicația nu are valoare
+> economică.
+
+### 2. Pusher Channels (sincronizare realtime)
+
+1. Cont gratuit pe [dashboard.pusher.com](https://dashboard.pusher.com) → **Channels** → Create app.
+2. Din tab-ul **App Keys** iei: `app_id`, `key`, `secret`, `cluster`.
+3. Pui în `.env.local`: `PUSHER_APP_ID`, `NEXT_PUBLIC_PUSHER_KEY`, `PUSHER_SECRET`,
+   `NEXT_PUBLIC_PUSHER_CLUSTER`.
+
+### 3. Upstash Redis (stare partajată)
+
+1. Cont gratuit pe [console.upstash.com](https://console.upstash.com) → creează o
+   bază Redis (sau adaugă integrarea Upstash direct din Vercel → Marketplace, care
+   completează automat variabilele de mediu).
+2. Copiază `UPSTASH_REDIS_REST_URL` și `UPSTASH_REDIS_REST_TOKEN` în `.env.local`.
+
+### 4. Variabile de mediu
+
+Copiază `.env.example` → `.env.local` și completează tot:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.example .env.local
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Generează un secret de sesiune:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+openssl rand -base64 32
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 5. Rulare locală
 
-## Learn More
+```bash
+npm install
+npm run dev
+```
 
-To learn more about Next.js, take a look at the following resources:
+Deschide [http://localhost:3000](http://localhost:3000) — vei fi redirecționat spre
+`/login`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Deploy pe Vercel
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. Push pe GitHub, apoi importă proiectul în [vercel.com/new](https://vercel.com/new).
+2. Adaugă în **Project Settings → Environment Variables** toate variabilele din
+   `.env.example` (aceleași valori ca local, sau parole diferite pentru producție).
+3. Deploy. Verifică Range requests: caută în browser la seek dacă cererile către
+   R2 au status `206 Partial Content`.
 
-## Deploy on Vercel
+## Note despre sincronizare
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- Oricine e autentificat poate controla playback-ul (nu există rol separat de
+  „host"); ultima acțiune câștigă și e propagată la toți.
+- La fiecare 20 de secunde de playback, clientul activ trimite un „heartbeat" cu
+  poziția curentă, ca să corecteze drift-ul pe sesiuni lungi.
+- Butonul **Sincronizează** din header forțează re-alinierea manuală cu starea din
+  server, util dacă cineva a avut buffering.
+
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
