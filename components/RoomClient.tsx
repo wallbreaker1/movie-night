@@ -35,12 +35,28 @@ export default function RoomClient({ name, movies }: RoomClientProps) {
   const [state, setState] = useState<RoomState | null>(null);
   const [viewers, setViewers] = useState<Viewer[]>([]);
   const [ready, setReady] = useState(false);
+  const [ownId, setOwnId] = useState<string | null>(null);
 
   const playerRef = useRef<VideoPlayerHandle>(null);
   const pusherRef = useRef<Pusher | null>(null);
   const channelRef = useRef<Channel | null>(null);
 
   const currentMovie = movies.find((m) => m.id === state?.movieId) ?? movies[0] ?? null;
+
+  /**
+   * There is no single fixed "master" client. Any connected client can send
+   * play/pause/seek/load actions and they take effect immediately for
+   * everyone (last action wins). However, if more than one device/tab is
+   * connected at the same time and left playing, each one independently
+   * sending periodic heartbeats (used only to correct clock drift on long
+   * sessions) would otherwise fight over the position. To avoid that, we
+   * deterministically elect exactly one connected client — the one with the
+   * lexicographically smallest presence id — as the sole heartbeat sender.
+   * Every client computes the same leader independently from the shared
+   * presence member list, so no server-side coordination is needed.
+   */
+  const isLeader =
+    ownId !== null && (viewers.length === 0 || [...viewers.map((v) => v.id)].sort()[0] === ownId);
 
   const sendAction = useCallback(
     async (action: string, extra: Record<string, unknown> = {}) => {
@@ -98,10 +114,11 @@ export default function RoomClient({ name, movies }: RoomClientProps) {
 
     channel.bind(
       "pusher:subscription_succeeded",
-      (members: { each: (cb: (m: PresenceMember) => void) => void }) => {
+      (members: { each: (cb: (m: PresenceMember) => void) => void; myID?: string }) => {
         const list: Viewer[] = [];
         members.each((m) => list.push({ id: m.id, name: m.info?.name ?? "Viewer" }));
         setViewers(list);
+        if (members.myID) setOwnId(members.myID);
       }
     );
     channel.bind("pusher:member_added", (member: PresenceMember) => {
@@ -134,15 +151,17 @@ export default function RoomClient({ name, movies }: RoomClientProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, currentMovie?.id]);
 
-  // Periodic heartbeat to correct drift during long sessions.
+  // Periodic heartbeat to correct drift during long sessions. Only the
+  // elected leader sends it, so multiple simultaneously-open devices don't
+  // fight over the playback position.
   useEffect(() => {
-    if (!state?.isPlaying) return;
+    if (!state?.isPlaying || !isLeader) return;
     const interval = setInterval(() => {
       const t = playerRef.current?.getCurrentTime();
       if (typeof t === "number") sendAction("heartbeat", { position: t });
     }, HEARTBEAT_INTERVAL_MS);
     return () => clearInterval(interval);
-  }, [state?.isPlaying, sendAction]);
+  }, [state?.isPlaying, isLeader, sendAction]);
 
   const handleManualResync = useCallback(() => {
     fetch("/api/state")
