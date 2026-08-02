@@ -29,6 +29,29 @@ export interface VideoPlayerHandle {
   getCurrentTime: () => number;
 }
 
+/**
+ * iOS Safari doesn't support the standard Fullscreen API on arbitrary
+ * elements (only Safari 16.4+ behind a feature and rarely enabled) — it only
+ * supports native fullscreen on the <video> element itself via the
+ * webkit-prefixed API. Older Android WebViews may also need the
+ * webkit-prefixed container API. These interfaces add the extra methods
+ * without resorting to `any`.
+ */
+interface FullscreenDocument extends Document {
+  webkitFullscreenElement?: Element | null;
+  webkitExitFullscreen?: () => Promise<void> | void;
+}
+
+interface FullscreenContainer extends HTMLDivElement {
+  webkitRequestFullscreen?: () => Promise<void> | void;
+}
+
+interface FullscreenVideo extends HTMLVideoElement {
+  webkitEnterFullscreen?: () => void;
+  webkitExitFullscreen?: () => void;
+  webkitDisplayingFullscreen?: boolean;
+}
+
 interface VideoPlayerProps {
   src: string;
   poster?: string;
@@ -133,9 +156,27 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function Vid
   }, [src]);
 
   useEffect(() => {
-    const onFsChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    const doc = document as FullscreenDocument;
+    const video = videoRef.current as FullscreenVideo | null;
+
+    const onFsChange = () =>
+      setIsFullscreen(
+        Boolean(doc.fullscreenElement || doc.webkitFullscreenElement || video?.webkitDisplayingFullscreen)
+      );
+
     document.addEventListener("fullscreenchange", onFsChange);
-    return () => document.removeEventListener("fullscreenchange", onFsChange);
+    document.addEventListener("webkitfullscreenchange", onFsChange);
+    // iOS Safari fires these directly on the <video> element when entering/
+    // exiting its native fullscreen player (no document-level event fires).
+    video?.addEventListener("webkitbeginfullscreen", onFsChange);
+    video?.addEventListener("webkitendfullscreen", onFsChange);
+
+    return () => {
+      document.removeEventListener("fullscreenchange", onFsChange);
+      document.removeEventListener("webkitfullscreenchange", onFsChange);
+      video?.removeEventListener("webkitbeginfullscreen", onFsChange);
+      video?.removeEventListener("webkitendfullscreen", onFsChange);
+    };
   }, []);
 
   // Sync the visual subtitle state with the video's native track.
@@ -204,12 +245,36 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function Vid
   }, []);
 
   const toggleFullscreen = useCallback(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    if (document.fullscreenElement) {
-      document.exitFullscreen().catch(() => {});
-    } else {
-      el.requestFullscreen().catch(() => {});
+    const el = containerRef.current as FullscreenContainer | null;
+    const video = videoRef.current as FullscreenVideo | null;
+    const doc = document as FullscreenDocument;
+
+    const currentlyFullscreen = Boolean(
+      doc.fullscreenElement || doc.webkitFullscreenElement || video?.webkitDisplayingFullscreen
+    );
+
+    if (currentlyFullscreen) {
+      if (doc.exitFullscreen) {
+        doc.exitFullscreen().catch(() => {});
+      } else if (doc.webkitExitFullscreen) {
+        doc.webkitExitFullscreen();
+      } else if (video?.webkitExitFullscreen) {
+        video.webkitExitFullscreen();
+      }
+      return;
+    }
+
+    if (el?.requestFullscreen) {
+      el.requestFullscreen().catch(() => {
+        // Container fullscreen rejected (e.g. iOS Safari) — fall back to native
+        // fullscreen on the <video> element itself.
+        video?.webkitEnterFullscreen?.();
+      });
+    } else if (el?.webkitRequestFullscreen) {
+      el.webkitRequestFullscreen();
+    } else if (video?.webkitEnterFullscreen) {
+      // iOS Safari: only the <video> element supports native fullscreen.
+      video.webkitEnterFullscreen();
     }
   }, []);
 
