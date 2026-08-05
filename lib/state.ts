@@ -14,8 +14,8 @@ export interface RoomState {
 
 const STATE_KEY = "movie-room:state:v1";
 
-function initialState(): RoomState {
-  const movies = getMovies();
+async function initialState(): Promise<RoomState> {
+  const movies = await getMovies();
   return {
     movieId: movies[0]?.id ?? null,
     isPlaying: false,
@@ -28,7 +28,7 @@ function initialState(): RoomState {
 export async function getRoomState(): Promise<RoomState> {
   const state = await redis.get<RoomState>(STATE_KEY);
   if (state) return state;
-  const fresh = initialState();
+  const fresh = await initialState();
   await redis.set(STATE_KEY, fresh);
   return fresh;
 }

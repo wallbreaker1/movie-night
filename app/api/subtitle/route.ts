@@ -20,7 +20,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Missing movieId" }, { status: 400 });
   }
 
-  const movie = getMovies().find((m) => m.id === movieId);
+  const movies = await getMovies();
+  const movie = movies.find((m) => m.id === movieId);
   if (!movie?.subtitleUrl) {
     return NextResponse.json({ error: "Subtitle not found" }, { status: 404 });
   }

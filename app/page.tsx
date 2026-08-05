@@ -13,7 +13,7 @@ export default async function Home() {
     redirect("/login");
   }
 
-  const movies = getMovies();
+  const movies = await getMovies();
 
   return (
     <main className="flex-1 bg-neutral-950">
