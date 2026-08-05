@@ -12,7 +12,7 @@ import type { RoomState } from "@/lib/state";
 
 interface RoomClientProps {
   isHost: boolean;
-  movies: Movie[];
+  initialMovies: Movie[];
 }
 
 interface Viewer {
@@ -31,8 +31,12 @@ function computeLivePosition(state: RoomState): number {
   return state.position + Math.max(elapsed, 0);
 }
 
-export default function RoomClient({ isHost, movies }: RoomClientProps) {
+const MOVIE_REFRESH_INTERVAL_MS = 30_000;
+
+export default function RoomClient({ isHost, initialMovies }: RoomClientProps) {
   const [state, setState] = useState<RoomState | null>(null);
+  const [movies, setMovies] = useState(initialMovies);
+  const [refreshingMovies, setRefreshingMovies] = useState(false);
   const [viewers, setViewers] = useState<Viewer[]>([]);
   const [ready, setReady] = useState(false);
 
@@ -41,6 +45,20 @@ export default function RoomClient({ isHost, movies }: RoomClientProps) {
   const channelRef = useRef<Channel | null>(null);
 
   const currentMovie = movies.find((m) => m.id === state?.movieId) ?? movies[0] ?? null;
+
+  const refreshMovies = useCallback(async (showProgress = true) => {
+    if (showProgress) setRefreshingMovies(true);
+    try {
+      const response = await fetch("/api/movies/sync", { cache: "no-store" });
+      if (!response.ok) throw new Error(`Movie sync failed (${response.status})`);
+      const data: { movies: Movie[] } = await response.json();
+      setMovies(data.movies);
+    } catch (error) {
+      console.error("Failed to refresh R2 playlist:", error);
+    } finally {
+      if (showProgress) setRefreshingMovies(false);
+    }
+  }, []);
 
   const sendAction = useCallback(
     async (action: string, extra: Record<string, unknown> = {}) => {
@@ -68,6 +86,11 @@ export default function RoomClient({ isHost, movies }: RoomClientProps) {
       isPlaying: data.isPlaying,
     });
   }, []);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => refreshMovies(false), MOVIE_REFRESH_INTERVAL_MS);
+    return () => window.clearInterval(interval);
+  }, [refreshMovies]);
 
   useEffect(() => {
     let cancelled = false;
@@ -219,15 +242,6 @@ export default function RoomClient({ isHost, movies }: RoomClientProps) {
         </div>
       ) : (
         <>
-          <div className="flex items-center justify-between gap-3">
-            <MovieSelect
-              movies={movies}
-              currentId={currentMovie.id}
-              onSelect={(id) => sendAction("load", { movieId: id })}
-              disabled={!isHost}
-            />
-          </div>
-
           <VideoPlayer
             ref={playerRef}
             src={currentMovie.url}
@@ -241,6 +255,16 @@ export default function RoomClient({ isHost, movies }: RoomClientProps) {
             onUserPause={(position) => sendAction("pause", { position })}
             onUserSeek={(position) => sendAction("seek", { position })}
           />
+
+          {isHost && (
+            <MovieSelect
+              movies={movies}
+              currentId={currentMovie.id}
+              onSelect={(id) => sendAction("load", { movieId: id })}
+              onRefresh={() => refreshMovies(true)}
+              refreshing={refreshingMovies}
+            />
+          )}
         </>
       )}
 

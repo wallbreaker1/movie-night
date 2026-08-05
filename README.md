@@ -41,7 +41,10 @@ authentication: two hardcoded passwords (via environment variables).
    for maximum browser compatibility).
 2. Enable public access for the bucket (either the `pub-xxxx.r2.dev` domain, or
    a custom domain connected to the bucket from the Cloudflare dashboard).
-3. Note the public URLs of the files — put them in `MOVIES_JSON`.
+3. Create an R2 API token with **Object Read** permission and add its Account ID,
+   Access Key ID and Secret Access Key to the environment variables below.
+4. Add videos to the bucket. The host playlist discovers them automatically
+   every 30 seconds; `MOVIES_JSON` is only used as a fallback.
 
 > If you want the video links to not be guessable, use hard-to-guess file names
 > (UUID). Anyone who knows the direct URL can access the file without a

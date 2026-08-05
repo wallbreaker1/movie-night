@@ -3,6 +3,7 @@ import { getRoomState, setRoomState, RoomState } from "@/lib/state";
 import { pusherServer } from "@/lib/pusher-server";
 import { verifySessionToken, SESSION_COOKIE } from "@/lib/auth";
 import { ROOM_CHANNEL, STATE_EVENT } from "@/lib/constants";
+import { getMovies } from "@/lib/movies";
 
 export async function GET() {
   const state = await getRoomState();
@@ -58,7 +59,14 @@ export async function POST(req: NextRequest) {
       if (typeof position === "number") next.position = position;
       break;
     case "load":
-      if (movieId) next.movieId = movieId;
+      if (!movieId) {
+        return NextResponse.json({ error: "Missing movieId" }, { status: 400 });
+      }
+      const movies = await getMovies({ forceRefresh: true });
+      if (!movies.some((movie) => movie.id === movieId)) {
+        return NextResponse.json({ error: "Movie is not in the R2 playlist" }, { status: 400 });
+      }
+      next.movieId = movieId;
       next.position = 0;
       next.isPlaying = false;
       break;

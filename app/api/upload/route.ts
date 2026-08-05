@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
       const rclonePath = process.env.RCLONE_PATH || "~/bin/rclone";
       const bucketName = process.env.R2_BUCKET_NAME || "movie-night";
 
-      const { stdout, stderr } = await execAsync(
+      await execAsync(
         `${rclonePath} copy "${tempPath}" r2:${bucketName}/ --s3-no-check-bucket`,
       );
 

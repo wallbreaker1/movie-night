@@ -1,7 +1,4 @@
-import { exec } from "child_process";
-import { promisify } from "util";
-
-const execAsync = promisify(exec);
+import { ListObjectsV2Command, S3Client } from "@aws-sdk/client-s3";
 
 export interface Movie {
   id: string;
@@ -13,87 +10,124 @@ export interface Movie {
   subtitleUrl?: string;
 }
 
+const VIDEO_EXTENSIONS = [".mp4", ".mkv", ".avi", ".mov", ".webm", ".m4v"];
+const SUBTITLE_EXTENSIONS = [".vtt", ".srt"];
+const CACHE_DURATION = 60_000;
+
 let moviesCache: Movie[] | null = null;
 let lastFetch = 0;
-const CACHE_DURATION = 60 * 1000; // 1 minute cache
 
-/**
- * Auto-syncs movies from R2 bucket using rclone.
- * Falls back to MOVIES_JSON env variable if R2 sync fails.
- */
-export async function getMovies(): Promise<Movie[]> {
-  // Return cached movies if still fresh
-  if (moviesCache && Date.now() - lastFetch < CACHE_DURATION) {
+function publicObjectUrl(baseUrl: string, key: string): string {
+  const encodedKey = key.split("/").map(encodeURIComponent).join("/");
+  return `${baseUrl.replace(/\/$/, "")}/${encodedKey}`;
+}
+
+function movieId(key: string): string {
+  return key
+    .replace(/\.[^/.]+$/, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function movieTitle(key: string): string {
+  const fileName = key.split("/").pop() ?? key;
+  return fileName.replace(/\.[^/.]+$/, "").replace(/[._-]+/g, " ").trim();
+}
+
+function moviesFromKeys(keys: string[], publicUrl: string): Movie[] {
+  const subtitles = keys.filter((key) =>
+    SUBTITLE_EXTENSIONS.some((extension) => key.toLowerCase().endsWith(extension)),
+  );
+
+  return keys
+    .filter((key) => VIDEO_EXTENSIONS.some((extension) => key.toLowerCase().endsWith(extension)))
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }))
+    .map((key) => {
+      const baseName = key.replace(/\.[^/.]+$/, "").toLowerCase();
+      const subtitle = subtitles.find(
+        (candidate) => candidate.replace(/\.[^/.]+$/, "").toLowerCase() === baseName,
+      );
+
+      return {
+        id: movieId(key),
+        title: movieTitle(key),
+        url: publicObjectUrl(publicUrl, key),
+        ...(subtitle ? { subtitleUrl: publicObjectUrl(publicUrl, subtitle) } : {}),
+      };
+    });
+}
+
+async function listR2Movies(): Promise<Movie[] | null> {
+  const accountId = process.env.R2_ACCOUNT_ID;
+  const accessKeyId = process.env.R2_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
+  const bucket = process.env.R2_BUCKET_NAME;
+  const publicUrl = process.env.R2_PUBLIC_URL;
+
+  if (!accountId || !accessKeyId || !secretAccessKey || !bucket || !publicUrl) return null;
+
+  const client = new S3Client({
+    region: "auto",
+    endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+    credentials: { accessKeyId, secretAccessKey },
+  });
+  const keys: string[] = [];
+  let continuationToken: string | undefined;
+
+  do {
+    const page = await client.send(
+      new ListObjectsV2Command({ Bucket: bucket, ContinuationToken: continuationToken }),
+    );
+    for (const object of page.Contents ?? []) {
+      if (object.Key) keys.push(object.Key);
+    }
+    continuationToken = page.IsTruncated ? page.NextContinuationToken : undefined;
+  } while (continuationToken);
+
+  return moviesFromKeys(keys, publicUrl);
+}
+
+function fallbackMovies(): Movie[] {
+  const raw = process.env.MOVIES_JSON;
+  if (!raw) return [];
+
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (movie): movie is Movie =>
+        Boolean(movie) &&
+        typeof movie.id === "string" &&
+        typeof movie.title === "string" &&
+        typeof movie.url === "string" &&
+        (movie.subtitleUrl === undefined || typeof movie.subtitleUrl === "string"),
+    );
+  } catch (error) {
+    console.error("MOVIES_JSON is invalid JSON:", error);
+    return [];
+  }
+}
+
+/** Lists the current R2 catalog, with MOVIES_JSON as a resilient fallback. */
+export async function getMovies(options: { forceRefresh?: boolean } = {}): Promise<Movie[]> {
+  if (!options.forceRefresh && moviesCache && Date.now() - lastFetch < CACHE_DURATION) {
     return moviesCache;
   }
 
-  // Try to sync from R2
   try {
-    const rclonePath = process.env.RCLONE_PATH || "~/bin/rclone";
-    const bucketName = process.env.R2_BUCKET_NAME || "movie-night";
-    const publicUrl = process.env.R2_PUBLIC_URL;
-
-    if (publicUrl) {
-      const { stdout } = await execAsync(
-        `${rclonePath} lsf r2:${bucketName}/ --s3-no-check-bucket`
-      );
-
-      const files = stdout.trim().split("\n").filter(Boolean);
-      const videoExtensions = [".mp4", ".mkv", ".avi", ".mov", ".webm", ".m4v"];
-
-      const movies = files
-        .filter((file) =>
-          videoExtensions.some((ext) => file.toLowerCase().endsWith(ext))
-        )
-        .map((file) => {
-          const nameWithoutExt = file.replace(/\.[^/.]+$/, "");
-          const id = nameWithoutExt.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-
-          const subtitleFile = files.find(
-            (f) =>
-              (f.endsWith(".vtt") || f.endsWith(".srt")) &&
-              f.startsWith(nameWithoutExt)
-          );
-
-          return {
-            id,
-            title: nameWithoutExt.replace(/[._-]/g, " "),
-            url: `${publicUrl}/${file}`,
-            ...(subtitleFile && {
-              subtitleUrl: `${publicUrl}/${subtitleFile}`,
-            }),
-          };
-        });
-
-      if (movies.length > 0) {
-        moviesCache = movies;
-        lastFetch = Date.now();
-        return movies;
-      }
+    const r2Movies = await listR2Movies();
+    if (r2Movies !== null) {
+      moviesCache = r2Movies;
+      lastFetch = Date.now();
+      return r2Movies;
     }
   } catch (error) {
-    console.error("Failed to sync movies from R2:", error);
+    console.error("Failed to list movies from R2:", error);
+    if (moviesCache) return moviesCache;
   }
 
-  // Fallback to MOVIES_JSON
-  const raw = process.env.MOVIES_JSON;
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    const movies = parsed.filter(
-      (m): m is Movie =>
-        m &&
-        typeof m.id === "string" &&
-        typeof m.title === "string" &&
-        typeof m.url === "string" &&
-        (m.subtitleUrl === undefined || typeof m.subtitleUrl === "string")
-    );
-    moviesCache = movies;
-    lastFetch = Date.now();
-    return movies;
-  } catch (err) {
-    console.error("MOVIES_JSON is invalid JSON:", err);
-    return [];
-  }
+  moviesCache = fallbackMovies();
+  lastFetch = Date.now();
+  return moviesCache;
 }
