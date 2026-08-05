@@ -3,11 +3,15 @@ import { ListObjectsV2Command, S3Client } from "@aws-sdk/client-s3";
 export interface Movie {
   id: string;
   title: string;
+  /** Original R2 object key, used for authenticated management actions. */
+  key?: string;
   /** Public URL (Cloudflare R2 / custom domain) to the video file. */
   url: string;
   poster?: string;
   /** Public URL to the subtitle file (WebVTT format, .vtt). */
   subtitleUrl?: string;
+  /** Original R2 subtitle object key, when one exists. */
+  subtitleKey?: string;
 }
 
 const VIDEO_EXTENSIONS = [".mp4", ".mkv", ".avi", ".mov", ".webm", ".m4v"];
@@ -52,8 +56,14 @@ function moviesFromKeys(keys: string[], publicUrl: string): Movie[] {
       return {
         id: movieId(key),
         title: movieTitle(key),
+        key,
         url: publicObjectUrl(publicUrl, key),
-        ...(subtitle ? { subtitleUrl: publicObjectUrl(publicUrl, subtitle) } : {}),
+        ...(subtitle
+          ? {
+              subtitleUrl: publicObjectUrl(publicUrl, subtitle),
+              subtitleKey: subtitle,
+            }
+          : {}),
       };
     });
 }

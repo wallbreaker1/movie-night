@@ -66,25 +66,6 @@ export default function RoomClient({ isHost, initialMovies }: RoomClientProps) {
     }
   }, []);
 
-  const sendAction = useCallback(
-    async (action: string, extra: Record<string, unknown> = {}) => {
-      // Guests can't control playback; the server would reject this anyway,
-      // but we skip the request client-side too.
-      if (!isHost) return;
-      const socketId = pusherRef.current?.connection.socket_id;
-      try {
-        await fetch("/api/state", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action, socketId, ...extra }),
-        });
-      } catch (err) {
-        console.error("Failed to send action:", err);
-      }
-    },
-    [isHost],
-  );
-
   const applyState = useCallback((data: RoomState) => {
     setState(data);
     playerRef.current?.syncTo({
@@ -92,6 +73,52 @@ export default function RoomClient({ isHost, initialMovies }: RoomClientProps) {
       isPlaying: data.isPlaying,
     });
   }, []);
+
+  const sendAction = useCallback(
+    async (action: string, extra: Record<string, unknown> = {}) => {
+      // Guests can't control playback; the server would reject this anyway,
+      // but we skip the request client-side too.
+      if (!isHost) return;
+      const socketId = pusherRef.current?.connection.socket_id;
+      try {
+        const response = await fetch("/api/state", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action, socketId, ...extra }),
+        });
+        if (!response.ok) {
+          const data = await response.json().catch(() => null);
+          throw new Error(data?.error || `Action failed (${response.status})`);
+        }
+        const nextState: RoomState = await response.json();
+        applyState(nextState);
+      } catch (err) {
+        console.error("Failed to send action:", err);
+      }
+    },
+    [applyState, isHost],
+  );
+
+  const deleteMovie = useCallback(
+    async (movieId: string) => {
+      const response = await fetch("/api/movies", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ movieId }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(data?.error || `Delete failed (${response.status})`);
+      }
+
+      const updatedMovies: Movie[] = data.movies;
+      setMovies(updatedMovies);
+      if (state?.movieId === movieId && updatedMovies[0]) {
+        await sendAction("load", { movieId: updatedMovies[0].id });
+      }
+    },
+    [sendAction, state?.movieId],
+  );
 
   useEffect(() => {
     const interval = window.setInterval(
@@ -284,6 +311,7 @@ export default function RoomClient({ isHost, initialMovies }: RoomClientProps) {
               currentId={currentMovie.id}
               onSelect={(id) => sendAction("load", { movieId: id })}
               onRefresh={() => refreshMovies(true)}
+              onDelete={deleteMovie}
               refreshing={refreshingMovies}
             />
           )}
