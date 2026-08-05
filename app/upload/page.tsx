@@ -12,6 +12,7 @@ interface UploadResult {
 export default function UploadPage() {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<UploadResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
@@ -37,15 +38,18 @@ export default function UploadPage() {
     if (!file) return;
 
     setUploading(true);
+    setProgress(0);
     setError(null);
 
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-
       const response = await fetch("/api/upload", {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fileName: file.name,
+          contentType: file.type || "application/octet-stream",
+          size: file.size,
+        }),
       });
 
       if (!response.ok) {
@@ -61,14 +65,41 @@ export default function UploadPage() {
         return;
       }
 
-      const data = await response.json();
+      const data: {
+        uploadUrl: string;
+        publicUrl: string;
+        fileName: string;
+      } = await response.json();
 
-      if (data.success) {
-        setResult(data);
-        setFile(null);
-      } else {
-        setError(data.error || "Upload failed");
-      }
+      await new Promise<void>((resolve, reject) => {
+        const upload = new XMLHttpRequest();
+        upload.open("PUT", data.uploadUrl);
+        upload.setRequestHeader(
+          "Content-Type",
+          file.type || "application/octet-stream",
+        );
+        upload.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            setProgress(Math.round((event.loaded / event.total) * 100));
+          }
+        };
+        upload.onload = () => {
+          if (upload.status >= 200 && upload.status < 300) resolve();
+          else reject(new Error(`R2 upload failed (${upload.status})`));
+        };
+        upload.onerror = () =>
+          reject(new Error("R2 upload failed. Check the bucket CORS policy."));
+        upload.send(file);
+      });
+
+      setProgress(100);
+      setResult({
+        success: true,
+        url: data.publicUrl,
+        fileName: data.fileName,
+        size: file.size,
+      });
+      setFile(null);
     } catch (err) {
       setError(String(err));
     } finally {
@@ -118,8 +149,16 @@ export default function UploadPage() {
             disabled={!file || uploading || !isAuthenticated}
             className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-medium py-3 px-4 rounded-lg transition"
           >
-            {uploading ? "Uploading..." : "Upload"}
+            {uploading ? `Uploading... ${progress}%` : "Upload"}
           </button>
+          {uploading && (
+            <div className="h-2 overflow-hidden rounded-full bg-gray-800">
+              <div
+                className="h-full bg-blue-500 transition-[width]"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          )}
         </form>
 
         {error && (

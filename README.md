@@ -112,3 +112,21 @@ Open [http://localhost:3000](http://localhost:3000) — you'll be redirected to
   server state, useful if someone experienced buffering.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+### Direct browser uploads to R2
+
+The `/upload` page requests a short-lived presigned URL from the app, then sends
+the file directly from the browser to R2. The R2 API token must have Object Read
+& Write permission. Configure the bucket CORS policy for the deployed app:
+
+```json
+[
+  {
+    "AllowedOrigins": ["https://your-app.vercel.app"],
+    "AllowedMethods": ["PUT"],
+    "AllowedHeaders": ["Content-Type"],
+    "ExposeHeaders": ["ETag"],
+    "MaxAgeSeconds": 3600
+  }
+]
+```

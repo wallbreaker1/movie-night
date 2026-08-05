@@ -1,15 +1,26 @@
+import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { NextRequest, NextResponse } from "next/server";
-import { writeFile, unlink } from "fs/promises";
-import { exec } from "child_process";
-import { promisify } from "util";
-import { join } from "path";
-import { tmpdir } from "os";
 import { verifySessionToken, SESSION_COOKIE } from "@/lib/auth";
 
-const execAsync = promisify(exec);
+const MAX_SINGLE_UPLOAD_SIZE = 5 * 1024 * 1024 * 1024;
+const ALLOWED_EXTENSIONS = [
+  ".mp4",
+  ".mkv",
+  ".avi",
+  ".mov",
+  ".webm",
+  ".m4v",
+  ".vtt",
+  ".srt",
+];
+
+function publicObjectUrl(baseUrl: string, key: string): string {
+  const encodedKey = key.split("/").map(encodeURIComponent).join("/");
+  return `${baseUrl.replace(/\/$/, "")}/${encodedKey}`;
+}
 
 export async function POST(request: NextRequest) {
-  // Require authentication
   const token = request.cookies.get(SESSION_COOKIE)?.value;
   const session = token ? await verifySessionToken(token) : null;
 
@@ -17,52 +28,76 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  try {
-    const formData = await request.formData();
-    const file = formData.get("file") as File;
+  const accountId = process.env.R2_ACCOUNT_ID;
+  const accessKeyId = process.env.R2_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
+  const bucket = process.env.R2_BUCKET_NAME;
+  const publicUrl = process.env.R2_PUBLIC_URL;
 
-    if (!file) {
-      return NextResponse.json({ error: "No file provided" }, { status: 400 });
-    }
-
-    // Save file temporarily
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-    const tempPath = join(tmpdir(), `upload-${Date.now()}-${file.name}`);
-    await writeFile(tempPath, buffer);
-
-    try {
-      // Upload to R2 using rclone
-      const rclonePath = process.env.RCLONE_PATH || "~/bin/rclone";
-      const bucketName = process.env.R2_BUCKET_NAME || "movie-night";
-
-      await execAsync(
-        `${rclonePath} copy "${tempPath}" r2:${bucketName}/ --s3-no-check-bucket`,
-      );
-
-      // Clean up temp file
-      await unlink(tempPath);
-
-      const publicUrl =
-        process.env.R2_PUBLIC_URL ||
-        "https://pub-5814eae11e444ef58ccd460277166557.r2.dev";
-      const fileUrl = `${publicUrl}/${file.name}`;
-
-      return NextResponse.json({
-        success: true,
-        url: fileUrl,
-        fileName: file.name,
-        size: file.size,
-      });
-    } catch (error) {
-      // Clean up temp file on error
-      await unlink(tempPath).catch(() => {});
-      throw error;
-    }
-  } catch (error) {
-    console.error("Upload error:", error);
+  if (!accountId || !accessKeyId || !secretAccessKey || !bucket || !publicUrl) {
     return NextResponse.json(
-      { error: "Upload failed", details: String(error) },
+      { error: "R2 is not fully configured" },
+      { status: 500 },
+    );
+  }
+
+  try {
+    const body: unknown = await request.json();
+    if (!body || typeof body !== "object") {
+      return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+    }
+
+    const { fileName, contentType, size } = body as Record<string, unknown>;
+    if (
+      typeof fileName !== "string" ||
+      typeof contentType !== "string" ||
+      typeof size !== "number" ||
+      !Number.isSafeInteger(size) ||
+      size <= 0
+    ) {
+      return NextResponse.json(
+        { error: "Invalid file metadata" },
+        { status: 400 },
+      );
+    }
+
+    const key = fileName.split(/[\\/]/).pop()?.trim();
+    const extension = key?.slice(key.lastIndexOf(".")).toLowerCase();
+    if (!key || key.length > 255 || !extension || !ALLOWED_EXTENSIONS.includes(extension)) {
+      return NextResponse.json(
+        { error: "Only video and subtitle files are allowed" },
+        { status: 400 },
+      );
+    }
+
+    if (size > MAX_SINGLE_UPLOAD_SIZE) {
+      return NextResponse.json(
+        { error: "Files larger than 5 GB require multipart upload" },
+        { status: 400 },
+      );
+    }
+
+    const client = new S3Client({
+      region: "auto",
+      endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+      credentials: { accessKeyId, secretAccessKey },
+    });
+    const command = new PutObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      ContentType: contentType || "application/octet-stream",
+    });
+    const uploadUrl = await getSignedUrl(client, command, { expiresIn: 3600 });
+
+    return NextResponse.json({
+      uploadUrl,
+      publicUrl: publicObjectUrl(publicUrl, key),
+      fileName: key,
+    });
+  } catch (error) {
+    console.error("Failed to create R2 upload URL:", error);
+    return NextResponse.json(
+      { error: "Could not prepare upload" },
       { status: 500 },
     );
   }
