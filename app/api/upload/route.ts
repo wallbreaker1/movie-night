@@ -4,10 +4,19 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import { join } from "path";
 import { tmpdir } from "os";
+import { verifySessionToken, SESSION_COOKIE } from "@/lib/auth";
 
 const execAsync = promisify(exec);
 
 export async function POST(request: NextRequest) {
+  // Require authentication
+  const token = request.cookies.get(SESSION_COOKIE)?.value;
+  const session = token ? await verifySessionToken(token) : null;
+
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const formData = await request.formData();
     const file = formData.get("file") as File;

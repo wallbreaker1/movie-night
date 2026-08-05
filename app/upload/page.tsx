@@ -1,12 +1,23 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
 export default function UploadPage() {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const router = useRouter();
+
+  useEffect(() => {
+    // Check if user is authenticated
+    fetch('/api/state')
+      .then(res => res.ok)
+      .then(ok => setIsAuthenticated(ok))
+      .catch(() => setIsAuthenticated(false));
+  }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -33,6 +44,19 @@ export default function UploadPage() {
         body: formData,
       });
 
+      if (!response.ok) {
+        const text = await response.text();
+        let errorMsg = 'Upload failed';
+        try {
+          const json = JSON.parse(text);
+          errorMsg = json.error || json.details || errorMsg;
+        } catch {
+          errorMsg = text || errorMsg;
+        }
+        setError(errorMsg);
+        return;
+      }
+
       const data = await response.json();
 
       if (data.success) {
@@ -53,6 +77,19 @@ export default function UploadPage() {
       <div className="max-w-2xl mx-auto">
         <h1 className="text-3xl font-bold mb-8">Upload to R2</h1>
 
+        {isAuthenticated === false && (
+          <div className="mb-6 p-4 bg-yellow-900/50 border border-yellow-700 rounded-lg">
+            <p className="font-medium">Not authenticated</p>
+            <p className="text-sm mt-1">
+              You need to{' '}
+              <a href="/login" className="text-blue-400 hover:underline">
+                log in
+              </a>{' '}
+              first to upload files.
+            </p>
+          </div>
+        )}
+
         <form onSubmit={handleUpload} className="space-y-6">
           <div>
             <label className="block mb-2 text-sm font-medium">
@@ -61,7 +98,7 @@ export default function UploadPage() {
             <input
               type="file"
               onChange={handleFileChange}
-              disabled={uploading}
+              disabled={uploading || !isAuthenticated}
               className="block w-full text-sm text-gray-300 border border-gray-600 rounded-lg cursor-pointer bg-gray-900 focus:outline-none p-2"
             />
             {file && (
@@ -73,7 +110,7 @@ export default function UploadPage() {
 
           <button
             type="submit"
-            disabled={!file || uploading}
+            disabled={!file || uploading || !isAuthenticated}
             className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-medium py-3 px-4 rounded-lg transition"
           >
             {uploading ? 'Uploading...' : 'Upload'}
