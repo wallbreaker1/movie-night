@@ -39,12 +39,16 @@ export async function POST(req: NextRequest) {
   if (!session?.isHost) {
     return NextResponse.json(
       { error: "Only the host can control playback." },
-      { status: 403 }
+      { status: 403 },
     );
   }
 
   const current = await getRoomState();
-  const next: RoomState = { ...current, updatedAt: Date.now(), updatedBy: name };
+  const next: RoomState = {
+    ...current,
+    updatedAt: Date.now(),
+    updatedBy: name,
+  };
 
   switch (action) {
     case "play":
@@ -64,7 +68,10 @@ export async function POST(req: NextRequest) {
       }
       const movies = await getMovies({ forceRefresh: true });
       if (!movies.some((movie) => movie.id === movieId)) {
-        return NextResponse.json({ error: "Movie is not in the R2 playlist" }, { status: 400 });
+        return NextResponse.json(
+          { error: "Movie is not in the R2 playlist" },
+          { status: 400 },
+        );
       }
       next.movieId = movieId;
       next.position = 0;
@@ -92,7 +99,7 @@ export async function POST(req: NextRequest) {
       ROOM_CHANNEL,
       STATE_EVENT,
       next,
-      socketId ? { socket_id: socketId } : undefined
+      socketId ? { socket_id: socketId } : undefined,
     );
   } catch (err) {
     console.error("Error sending Pusher event:", err);

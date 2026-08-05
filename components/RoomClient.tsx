@@ -6,7 +6,11 @@ import type { Channel } from "pusher-js";
 import VideoPlayer, { VideoPlayerHandle } from "./VideoPlayer";
 import MovieSelect from "./MovieSelect";
 import { UsersIcon, LogOutIcon, SyncIcon } from "./Icons";
-import { ROOM_CHANNEL, STATE_EVENT, HEARTBEAT_INTERVAL_MS } from "@/lib/constants";
+import {
+  ROOM_CHANNEL,
+  STATE_EVENT,
+  HEARTBEAT_INTERVAL_MS,
+} from "@/lib/constants";
 import type { Movie } from "@/lib/movies";
 import type { RoomState } from "@/lib/state";
 
@@ -44,13 +48,15 @@ export default function RoomClient({ isHost, initialMovies }: RoomClientProps) {
   const pusherRef = useRef<Pusher | null>(null);
   const channelRef = useRef<Channel | null>(null);
 
-  const currentMovie = movies.find((m) => m.id === state?.movieId) ?? movies[0] ?? null;
+  const currentMovie =
+    movies.find((m) => m.id === state?.movieId) ?? movies[0] ?? null;
 
   const refreshMovies = useCallback(async (showProgress = true) => {
     if (showProgress) setRefreshingMovies(true);
     try {
       const response = await fetch("/api/movies/sync", { cache: "no-store" });
-      if (!response.ok) throw new Error(`Movie sync failed (${response.status})`);
+      if (!response.ok)
+        throw new Error(`Movie sync failed (${response.status})`);
       const data: { movies: Movie[] } = await response.json();
       setMovies(data.movies);
     } catch (error) {
@@ -76,7 +82,7 @@ export default function RoomClient({ isHost, initialMovies }: RoomClientProps) {
         console.error("Failed to send action:", err);
       }
     },
-    [isHost]
+    [isHost],
   );
 
   const applyState = useCallback((data: RoomState) => {
@@ -88,7 +94,10 @@ export default function RoomClient({ isHost, initialMovies }: RoomClientProps) {
   }, []);
 
   useEffect(() => {
-    const interval = window.setInterval(() => refreshMovies(false), MOVIE_REFRESH_INTERVAL_MS);
+    const interval = window.setInterval(
+      () => refreshMovies(false),
+      MOVIE_REFRESH_INTERVAL_MS,
+    );
     return () => window.clearInterval(interval);
   }, [refreshMovies]);
 
@@ -107,7 +116,9 @@ export default function RoomClient({ isHost, initialMovies }: RoomClientProps) {
     const key = process.env.NEXT_PUBLIC_PUSHER_KEY;
     const cluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER;
     if (!key || !cluster) {
-      console.error("NEXT_PUBLIC_PUSHER_KEY / NEXT_PUBLIC_PUSHER_CLUSTER are missing.");
+      console.error(
+        "NEXT_PUBLIC_PUSHER_KEY / NEXT_PUBLIC_PUSHER_CLUSTER are missing.",
+      );
       return () => {
         cancelled = true;
       };
@@ -126,12 +137,17 @@ export default function RoomClient({ isHost, initialMovies }: RoomClientProps) {
       "pusher:subscription_succeeded",
       (members: { each: (cb: (m: PresenceMember) => void) => void }) => {
         const list: Viewer[] = [];
-        members.each((m) => list.push({ id: m.id, name: m.info?.name ?? "Viewer" }));
+        members.each((m) =>
+          list.push({ id: m.id, name: m.info?.name ?? "Viewer" }),
+        );
         setViewers(list);
-      }
+      },
     );
     channel.bind("pusher:member_added", (member: PresenceMember) => {
-      setViewers((prev) => [...prev, { id: member.id, name: member.info?.name ?? "Viewer" }]);
+      setViewers((prev) => [
+        ...prev,
+        { id: member.id, name: member.info?.name ?? "Viewer" },
+      ]);
     });
     channel.bind("pusher:member_removed", (member: PresenceMember) => {
       setViewers((prev) => prev.filter((v) => v.id !== member.id));
@@ -191,7 +207,9 @@ export default function RoomClient({ isHost, initialMovies }: RoomClientProps) {
           <p className="text-xs text-white/50">
             <span
               className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
-                isHost ? "bg-red-500/20 text-red-400" : "bg-white/10 text-white/60"
+                isHost
+                  ? "bg-red-500/20 text-red-400"
+                  : "bg-white/10 text-white/60"
               }`}
             >
               {isHost ? "Host" : "Guest"}
@@ -236,8 +254,10 @@ export default function RoomClient({ isHost, initialMovies }: RoomClientProps) {
         <div className="flex flex-1 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-white/15 p-12 text-center text-white/60">
           <p className="text-base font-medium">No movie configured</p>
           <p className="max-w-md text-sm">
-            Set the <code className="rounded bg-white/10 px-1">MOVIES_JSON</code> environment variable
-            with the list of movies (id, title, public URL from Cloudflare R2).
+            Set the{" "}
+            <code className="rounded bg-white/10 px-1">MOVIES_JSON</code>{" "}
+            environment variable with the list of movies (id, title, public URL
+            from Cloudflare R2).
           </p>
         </div>
       ) : (
@@ -248,7 +268,9 @@ export default function RoomClient({ isHost, initialMovies }: RoomClientProps) {
             poster={currentMovie.poster}
             title={currentMovie.title}
             subtitleUrl={
-              currentMovie.subtitleUrl ? `/api/subtitle?movieId=${currentMovie.id}` : undefined
+              currentMovie.subtitleUrl
+                ? `/api/subtitle?movieId=${currentMovie.id}`
+                : undefined
             }
             canControl={isHost}
             onUserPlay={(position) => sendAction("play", { position })}

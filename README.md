@@ -111,5 +111,4 @@ Open [http://localhost:3000](http://localhost:3000) — you'll be redirected to
 - The **Sync** button in the header forces a manual re-alignment with the
   server state, useful if someone experienced buffering.
 
-
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
